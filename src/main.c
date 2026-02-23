@@ -154,8 +154,21 @@ int hash_file(char *filepath, SHA256_CTX* ctx) {
     return 0;
 }
 
-void base64_encode(unsigned char* hash[32], unsigned char output[44]) {
+void base64_encode(unsigned char hash[32], unsigned char output[44]) {
+    const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int i, j = 0;
 
+    for (i = 0; i < 32; i += 3) {
+        unsigned char b1 = hash[i];
+        unsigned char b2 = (i + 1 < 32) ? hash[i + 1] : 0;
+        unsigned char b3 = (i + 2 < 32) ? hash[i + 2] : 0;
+
+        output[j++] = base64_chars[(b1 >> 2) & 0x3F];
+        output[j++] = base64_chars[((b1 & 0x03) << 4) | ((b2 >> 4) & 0x0F)];
+        output[j++] = (i + 1 < 32) ? base64_chars[((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03)] : '=';
+        output[j++] = (i + 2 < 32) ? base64_chars[b3 & 0x3F] : '=';
+    }
+    output[j] = '\0';
 }
 
 int main(int argc, char *argv[]) {
