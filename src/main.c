@@ -152,6 +152,9 @@ int hash_file(char *filepath, SHA256_CTX* ctx) {
 
     fclose(file);
     return 0;
+}
+
+void base64_encode(unsigned char* hash[32], unsigned char output[44]) {
 
 }
 
@@ -160,6 +163,9 @@ int main(int argc, char *argv[]) {
     char* bundle;
     struct parsedBundle parsed_bundle;
     SHA256_CTX ctx;
+    unsigned char file_hash[32];
+    char file_hash_b64[44];
+
 
     memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
@@ -186,14 +192,26 @@ int main(int argc, char *argv[]) {
     printf("digest from bundle: %s\n", parsed_bundle.digest->valuestring);
 
     filepath = argv[2];
-    sha256_init(ctx);
-    if (hash_file(filepath, ctx) != 0) {
+    sha256_init(&ctx);
+    if (hash_file(filepath, &ctx) != 0) {
+        cJSON_Delete(parsed_bundle.bundle);
+        return 1;
+    }
+    sha256_final(&ctx, file_hash);
+
+    base64_encode(file_hash, file_hash_b64);
+
+    if (strncmp(file_hash_b64, parsed_bundle.digest->valuestring, 44) == 0) {
+        printf("Digest matches\n");
+    } else {
+        fprintf(stderr, "Error: Digest mismatch\n");
+        fprintf(stderr, "Expected: %s\n", parsed_bundle.digest->valuestring);
+        fprintf(stderr, "Got: %s\n", file_hash_b64);
         cJSON_Delete(parsed_bundle.bundle);
         return 1;
     }
 
     // Cleanup
     cJSON_Delete(parsed_bundle.bundle);
-
     return 0;
 }
