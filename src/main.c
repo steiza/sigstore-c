@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
 #include "cjson/cJSON.h"
+#include "sha256.h"
 
 static int MAX_FILE_SIZE = 102400;
 
@@ -14,14 +16,14 @@ struct parsedBundle {
     cJSON *digest;
 };
 
-char *read_bundle(const char* filename) {
+char *read_bundle(const char* filepath) {
     struct stat file_stat;
     FILE* file;
     char* buffer;
     size_t bytes_read;
 
-    if (stat(filename, &file_stat) != 0) {
-        fprintf(stderr, "Error: Unable to access file '%s'\n", filename);
+    if (stat(filepath, &file_stat) != 0) {
+        fprintf(stderr, "Error: Unable to access file '%s'\n", filepath);
         return NULL;
     }
 
@@ -30,9 +32,9 @@ char *read_bundle(const char* filename) {
         return NULL;
     }
 
-    file = fopen(filename, "rb");
+    file = fopen(filepath, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file '%s'\n", filename);
+        fprintf(stderr, "Error: Unable to open file '%s'\n", filepath);
         return NULL;
     }
 
@@ -132,20 +134,42 @@ void parse_bundle(char* bundle, struct parsedBundle* parsed_bundle) {
     }
 }
 
-int main(int argc, char *argv[]) {
-    char* filename;
-    char* bundle;
-    struct parsedBundle parsed_bundle;
+int hash_file(char *filepath, SHA256_CTX* ctx) {
+    FILE* file;
+    char buffer[16384];
+    size_t bytes_read;
 
-    memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
-
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+    file = fopen(filepath, "rb");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to open file '%s'\n", filepath);
         return 1;
     }
 
-    filename = argv[1];
-    bundle = read_bundle(filename);
+    do {
+        bytes_read = fread(buffer, 1, 16384, file);
+        sha256_update(ctx, buffer, bytes_read);
+    } while (bytes_read > 0);
+
+    fclose(file);
+    return 0;
+
+}
+
+int main(int argc, char *argv[]) {
+    char* filepath;
+    char* bundle;
+    struct parsedBundle parsed_bundle;
+    SHA256_CTX ctx;
+
+    memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
+
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <bundle> <filename>\n", argv[0]);
+        return 1;
+    }
+
+    filepath = argv[1];
+    bundle = read_bundle(filepath);
 
     if (bundle == NULL) {
         return 1;
@@ -158,8 +182,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("signature: %s\n", parsed_bundle.signature->valuestring);
-    printf("digest: %s\n", parsed_bundle.digest->valuestring);
+    printf("signature from bundle: %s\n", parsed_bundle.signature->valuestring);
+    printf("digest from bundle: %s\n", parsed_bundle.digest->valuestring);
+
+    filepath = argv[2];
+    sha256_init(ctx);
+    if (hash_file(filepath, ctx) != 0) {
+        cJSON_Delete(parsed_bundle.bundle);
+        return 1;
+    }
 
     // Cleanup
     cJSON_Delete(parsed_bundle.bundle);
