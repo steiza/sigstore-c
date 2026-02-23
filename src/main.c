@@ -11,6 +11,7 @@ struct parsedBundle {
     cJSON *media_type;
     cJSON *message_signature;
     cJSON *signature;
+    cJSON *digest;
 };
 
 char *read_bundle(const char* filename) {
@@ -55,6 +56,11 @@ char *read_bundle(const char* filename) {
 }
 
 void parse_bundle(char* bundle, struct parsedBundle* parsed_bundle) {
+    const char *expected_media_type = "application/vnd.dev.sigstore.bundle.v0.3+json\0";
+    const char *expected_algorithm = "SHA2_256\0";
+    cJSON *message_digest;
+    cJSON *algorithm;
+
     parsed_bundle->bundle = cJSON_Parse(bundle);
     if (parsed_bundle->bundle == NULL) {
         return;
@@ -68,7 +74,6 @@ void parse_bundle(char* bundle, struct parsedBundle* parsed_bundle) {
         return;
     }
     
-    const char *expected_media_type = "application/vnd.dev.sigstore.bundle.v0.3+json\0";
     if (strncmp(parsed_bundle->media_type->valuestring, expected_media_type, strlen(expected_media_type)) != 0) {
         fprintf(stderr, "Error: Invalid mediaType. Expected '%s', got '%s'\n", 
                 expected_media_type, parsed_bundle->media_type->valuestring);
@@ -92,12 +97,47 @@ void parse_bundle(char* bundle, struct parsedBundle* parsed_bundle) {
         parsed_bundle->bundle = NULL;
         return;
     }
+
+    message_digest = cJSON_GetObjectItemCaseSensitive(parsed_bundle->message_signature, "messageDigest");
+    if (message_digest == NULL) {
+        fprintf(stderr, "Error: Missing 'messageDigest' field\n");
+        cJSON_Delete(parsed_bundle->bundle);
+        parsed_bundle->bundle = NULL;
+        return;
+    }
+
+    algorithm = cJSON_GetObjectItemCaseSensitive(message_digest, "algorithm");
+    if (algorithm == NULL || algorithm->type != cJSON_String) {
+        fprintf(stderr, "Error: Missing or invalid 'messageSignature.algorithm' field\n");
+        cJSON_Delete(parsed_bundle->bundle);
+        parsed_bundle->bundle = NULL;
+        return;
+    }
+
+
+    if (strncmp(algorithm->valuestring, expected_algorithm, strlen(expected_algorithm)) != 0) {
+        fprintf(stderr, "Error: Invalid algorithm. Expected '%s', got '%s'\n", 
+                expected_algorithm, algorithm->valuestring);
+        cJSON_Delete(parsed_bundle->bundle);
+        parsed_bundle->bundle = NULL;
+        return;
+    }
+
+    parsed_bundle->digest = cJSON_GetObjectItemCaseSensitive(message_digest, "digest");
+    if (parsed_bundle->digest == NULL || parsed_bundle->digest->type != cJSON_String) {
+        fprintf(stderr, "Error: Missing or invalid 'messageSignature.digest' field\n");
+        cJSON_Delete(parsed_bundle->bundle);
+        parsed_bundle->bundle = NULL;
+        return;
+    }
 }
 
 int main(int argc, char *argv[]) {
     char* filename;
     char* bundle;
     struct parsedBundle parsed_bundle;
+
+    memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
@@ -111,7 +151,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    parsed_bundle.bundle = NULL;
     parse_bundle(bundle, &parsed_bundle);
     free(bundle);
     if (parsed_bundle.bundle == NULL) {
@@ -120,6 +159,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("signature: %s\n", parsed_bundle.signature->valuestring);
+    printf("digest: %s\n", parsed_bundle.digest->valuestring);
 
     // Cleanup
     cJSON_Delete(parsed_bundle.bundle);
