@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 #include "cjson/cJSON.h"
+#include "ecdsa.h"
 #include "sha256.h"
 
 static int MAX_FILE_SIZE = 102400;
@@ -178,12 +179,12 @@ int main(int argc, char *argv[]) {
     SHA256_CTX ctx;
     unsigned char file_hash[32];
     char file_hash_b64[44];
-
+    ECDSA_PublicKey public_key;
 
     memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s <bundle> <filename>\n", argv[0]);
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s <bundle> <key> <filename>\n", argv[0]);
         return 1;
     }
 
@@ -204,7 +205,7 @@ int main(int argc, char *argv[]) {
     printf("signature from bundle: %s\n", parsed_bundle.signature->valuestring);
     printf("digest from bundle: %s\n", parsed_bundle.digest->valuestring);
 
-    filepath = argv[2];
+    filepath = argv[3];
     sha256_init(&ctx);
     if (hash_file(filepath, &ctx) != 0) {
         cJSON_Delete(parsed_bundle.bundle);
@@ -223,6 +224,20 @@ int main(int argc, char *argv[]) {
         cJSON_Delete(parsed_bundle.bundle);
         return 1;
     }
+
+    filepath = argv[2];
+    if (ecdsa_load_public_key_p256(filepath, &public_key) != 0) {
+        fprintf(stderr, "Error: unable to load public key");
+        cJSON_Delete(parsed_bundle.bundle);
+        return 1;
+    }
+
+    if (ecdsa_verify_p256(&public_key, file_hash, 32, parsed_bundle.signature->valuestring, strlen(parsed_bundle.signature->valuestring)) != 0) {
+        cJSON_Delete(parsed_bundle.bundle);
+        return 1;
+    }
+
+    printf("Signature verified successfully\n");
 
     // Cleanup
     cJSON_Delete(parsed_bundle.bundle);
