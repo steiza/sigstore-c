@@ -18,4 +18,6 @@ int ecdsa_verify_p256(const ECDSA_PublicKey *public_key,
                       const unsigned char *signature,
                       size_t signature_len);
 
+int base64_decode(const char *input, unsigned char *output, size_t *out_len);
+
 #endif /* ECDSA_H_ */

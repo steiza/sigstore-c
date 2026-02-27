@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "base64.h"
 #include "ecdsa.h"
 
 #define P256_LIMBS 8
@@ -435,43 +436,6 @@ static void point_mul(const uint32_t *scalar, const ECDSA_Point *point, ECDSA_Po
 	point_copy(out, &result);
 }
 
-static int decode_base64_char(char c) {
-	if (c >= 'A' && c <= 'Z') return c - 'A';
-	if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-	if (c >= '0' && c <= '9') return c - '0' + 52;
-	if (c == '+') return 62;
-	if (c == '/') return 63;
-	return -1;
-}
-
-static int base64_decode(const char *input, unsigned char *output, size_t *out_len) {
-	size_t len = strlen(input);
-	size_t i = 0;
-	size_t j = 0;
-	int val;
-	int valb = -8;
-	int acc = 0;
-
-	for (i = 0; i < len; ++i) {
-		char c = input[i];
-		if (c == '=' || c == '\n' || c == '\r' || c == ' ' || c == '\t') {
-			continue;
-		}
-		val = decode_base64_char(c);
-		if (val < 0) {
-			return 1;
-		}
-		acc = (acc << 6) | val;
-		valb += 6;
-		if (valb >= 0) {
-			output[j++] = (unsigned char)((acc >> valb) & 0xff);
-			valb -= 8;
-		}
-	}
-
-	*out_len = j;
-	return 0;
-}
 
 static char *read_file_all(const char *path, size_t *out_len) {
 	FILE *file = NULL;

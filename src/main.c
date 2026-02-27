@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "base64.h"
 #include "cjson/cJSON.h"
 #include "ecdsa.h"
 #include "sha256.h"
@@ -155,23 +156,6 @@ int hash_file(char *filepath, SHA256_CTX* ctx) {
     return 0;
 }
 
-void base64_encode(unsigned char hash[32], unsigned char output[44]) {
-    const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    int i, j = 0;
-
-    for (i = 0; i < 32; i += 3) {
-        unsigned char b1 = hash[i];
-        unsigned char b2 = (i + 1 < 32) ? hash[i + 1] : 0;
-        unsigned char b3 = (i + 2 < 32) ? hash[i + 2] : 0;
-
-        output[j++] = base64_chars[(b1 >> 2) & 0x3F];
-        output[j++] = base64_chars[((b1 & 0x03) << 4) | ((b2 >> 4) & 0x0F)];
-        output[j++] = (i + 1 < 32) ? base64_chars[((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03)] : '=';
-        output[j++] = (i + 2 < 32) ? base64_chars[b3 & 0x3F] : '=';
-    }
-    output[j] = '\0';
-}
-
 int main(int argc, char *argv[]) {
     char* filepath;
     char* bundle;
@@ -180,6 +164,8 @@ int main(int argc, char *argv[]) {
     unsigned char file_hash[32];
     char file_hash_b64[44];
     ECDSA_PublicKey public_key;
+    char signature_bytes[72];
+    size_t signature_bytes_size;
 
     memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
@@ -225,14 +211,21 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    if (strlen(parsed_bundle.signature->valuestring) != 96) {
+        fprintf(stderr, "Error: bundle signature is incorrect size");
+        cJSON_Delete(parsed_bundle.bundle);
+        return 1;
+    }
+    base64_decode(parsed_bundle.signature->valuestring, signature_bytes, &signature_bytes_size);
+
     filepath = argv[2];
     if (ecdsa_load_public_key_p256(filepath, &public_key) != 0) {
         fprintf(stderr, "Error: unable to load public key");
         cJSON_Delete(parsed_bundle.bundle);
         return 1;
     }
-
-    if (ecdsa_verify_p256(&public_key, file_hash, 32, parsed_bundle.signature->valuestring, strlen(parsed_bundle.signature->valuestring)) != 0) {
+    if (ecdsa_verify_p256(&public_key, file_hash, 32, signature_bytes, signature_bytes_size) != 0) {
+        fprintf(stderr, "Error: signature failed to verify");
         cJSON_Delete(parsed_bundle.bundle);
         return 1;
     }
