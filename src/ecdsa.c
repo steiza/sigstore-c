@@ -408,6 +408,9 @@ static void point_mul(const uint32_t *scalar, const ECDSA_Point *point, ECDSA_Po
 	point_copy(&addend, point);
 
 	for (bit = 0; bit < 256; ++bit) {
+		if (bit % 21 == 0) {
+			printf("Verifying signature ...\n");
+		}
 		if ((scalar[bit / 32] >> (bit % 32)) & 1u) {
 			ECDSA_Point tmp;
 			point_add(&result, &addend, &tmp);
@@ -739,6 +742,8 @@ int ecdsa_verify_p256(const ECDSA_PublicKey *public_key,
 	ECDSA_Point p2;
 	ECDSA_Point sum;
 	uint32_t x_mod_n[P256_LIMBS];
+	uint32_t input[16];
+	size_t i;
 
 	if (public_key == NULL || hash == NULL || signature == NULL) {
 		fprintf(stderr, "Error: Invalid arguments to ECDSA verify\n");
@@ -781,7 +786,12 @@ int ecdsa_verify_p256(const ECDSA_PublicKey *public_key,
 		return 0;
 	}
 
-	bn_mod_512((uint32_t[16]){sum.x[0],sum.x[1],sum.x[2],sum.x[3],sum.x[4],sum.x[5],sum.x[6],sum.x[7],0,0,0,0,0,0,0,0}, P256_N, x_mod_n);
+	memset(input, 0, sizeof(input));
+	for (i = 0; i < 8; i++) {
+		input[i] = sum.x[i];
+	}
+
+	bn_mod_512(input, P256_N, x_mod_n);
 
 	if (bn_cmp(x_mod_n, r) == 0) {
 		return 1;

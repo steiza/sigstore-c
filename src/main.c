@@ -29,11 +29,6 @@ char *read_bundle(const char* filepath) {
         return NULL;
     }
 
-    if (file_stat.st_size >= MAX_FILE_SIZE) {
-        fprintf(stderr, "Error: File is too large (must be less than 100KB)\n");
-        return NULL;
-    }
-
     file = fopen(filepath, "rb");
     if (file == NULL) {
         fprintf(stderr, "Error: Unable to open file '%s'\n", filepath);
@@ -138,7 +133,7 @@ void parse_bundle(char* bundle, struct parsedBundle* parsed_bundle) {
 
 int hash_file(char *filepath, SHA256_CTX* ctx) {
     FILE* file;
-    char buffer[16384];
+    char buffer[1024];
     size_t bytes_read;
 
     file = fopen(filepath, "rb");
@@ -148,7 +143,7 @@ int hash_file(char *filepath, SHA256_CTX* ctx) {
     }
 
     do {
-        bytes_read = fread(buffer, 1, 16384, file);
+        bytes_read = fread(buffer, 1, 1024, file);
         sha256_update(ctx, buffer, bytes_read);
     } while (bytes_read > 0);
 
