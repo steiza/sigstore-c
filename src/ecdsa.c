@@ -322,18 +322,6 @@ static void bn_from_bytes_be(const unsigned char *in, uint32_t *out) {
 	}
 }
 
-static void bn_to_bytes_be(const uint32_t *in, unsigned char *out) {
-	size_t i;
-
-	for (i = 0; i < P256_LIMBS; ++i) {
-		size_t idx = (P256_LIMBS - 1 - i) * 4;
-		out[idx] = (unsigned char)(in[i] >> 24);
-		out[idx + 1] = (unsigned char)(in[i] >> 16);
-		out[idx + 2] = (unsigned char)(in[i] >> 8);
-		out[idx + 3] = (unsigned char)in[i];
-	}
-}
-
 static void point_copy(ECDSA_Point *out, const ECDSA_Point *in) {
 	bn_copy(out->x, in->x);
 	bn_copy(out->y, in->y);
@@ -648,8 +636,6 @@ static int parse_ecdsa_signature(const unsigned char *sig, size_t sig_len, uint3
 	size_t offset = 0;
 	size_t seq_len = 0;
 	size_t int_len = 0;
-	unsigned char tmp[32];
-	size_t pad = 0;
 
 	if (der_expect_tag(sig, sig_len, &offset, 0x30, &seq_len) != 0) {
 		return 1;
@@ -661,45 +647,19 @@ static int parse_ecdsa_signature(const unsigned char *sig, size_t sig_len, uint3
 	if (der_expect_tag(sig, sig_len, &offset, 0x02, &int_len) != 0) {
 		return 1;
 	}
-	if (int_len == 0 || (offset + int_len) > sig_len) {
+	if (int_len != 33 || (sig[offset] & 0x80u) != 0) {
 		return 1;
 	}
-	if (int_len == 32 && (sig[offset] & 0x80u) != 0) {
-		return 1;
-	}
-	while (int_len > 32 && sig[offset] == 0x00) {
-		offset++;
-		int_len--;
-	}
-	if (int_len > 32) {
-		return 1;
-	}
-	pad = 32 - int_len;
-	memset(tmp, 0, sizeof(tmp));
-	memcpy(tmp + pad, sig + offset, int_len);
-	bn_from_bytes_be(tmp, out_r);
+	memcpy(out_r, sig + offset + 1, 32);
 	offset += int_len;
 
 	if (der_expect_tag(sig, sig_len, &offset, 0x02, &int_len) != 0) {
 		return 1;
 	}
-	if (int_len == 0 || (offset + int_len) > sig_len) {
+	if (int_len != 33 || (sig[offset] & 0x80u) != 0) {
 		return 1;
 	}
-	if (int_len == 32 && (sig[offset] & 0x80u) != 0) {
-		return 1;
-	}
-	while (int_len > 32 && sig[offset] == 0x00) {
-		offset++;
-		int_len--;
-	}
-	if (int_len > 32) {
-		return 1;
-	}
-	pad = 32 - int_len;
-	memset(tmp, 0, sizeof(tmp));
-	memcpy(tmp + pad, sig + offset, int_len);
-	bn_from_bytes_be(tmp, out_s);
+	memcpy(out_s, sig + offset + 1, 32);
 
 	return 0;
 }
