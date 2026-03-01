@@ -643,26 +643,26 @@ static int parse_ecdsa_signature(const unsigned char *sig, size_t sig_len, uint3
 	if (der_expect_tag(sig, sig_len, &offset, 0x30, &seq_len) != 0) {
 		return 1;
 	}
-	if (offset + seq_len != sig_len) {
+	if (offset + seq_len > sig_len) {
 		return 1;
 	}
 
 	if (der_expect_tag(sig, sig_len, &offset, 0x02, &int_len) != 0) {
 		return 1;
 	}
-	if (int_len != 33 || (sig[offset] & 0x80u) != 0) {
+	if (int_len < 32 || int_len > 33 || (sig[offset] & 0x80u) != 0) {
 		return 1;
 	}
-	memcpy(out_r, sig + offset + 1, 32);
+	memcpy(out_r, sig + offset + (int_len - 32), 32);
 	offset += int_len;
 
 	if (der_expect_tag(sig, sig_len, &offset, 0x02, &int_len) != 0) {
 		return 1;
 	}
-	if (int_len != 33 || (sig[offset] & 0x80u) != 0) {
+	if (int_len < 32 || int_len > 33 || (sig[offset] & 0x80u) != 0) {
 		return 1;
 	}
-	memcpy(out_s, sig + offset + 1, 32);
+	memcpy(out_s, sig + offset + (int_len - 32), 32);
 
 	return 0;
 }
