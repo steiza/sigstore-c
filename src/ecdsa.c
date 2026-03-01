@@ -120,6 +120,13 @@ static int bn_get_bit_512(const uint32_t *in, int bit) {
 	return (in[word] >> offset) & 1u;
 }
 
+static int bn_get_bit_256(const uint32_t *in, int bit) {
+	int word = bit / 32;
+	int offset = bit % 32;
+
+	return (in[word] >> offset) & 1u;
+}
+
 static void bn_mod_512(const uint32_t *in, const uint32_t *mod, uint32_t *out) {
 	uint32_t rem[P256_LIMBS + 1];
 	int bit;
@@ -193,21 +200,6 @@ static void bn_shift_right1(uint32_t *a, uint32_t carry_in) {
 		a[i] = (a[i] >> 1) | (carry << 31);
 		carry = new_carry;
 	}
-}
-
-static void bn_shift_left1(uint32_t *a) {
-	size_t i;
-	uint32_t carry = 0;
-
-	for (i = 0; i < P256_LIMBS; ++i) {
-		uint32_t new_carry = a[i] >> 31;
-		a[i] = (a[i] << 1) | carry;
-		carry = new_carry;
-	}
-}
-
-static void bn_sub_inplace(uint32_t *a, const uint32_t *b) {
-	bn_sub_raw(a, b, a, NULL);
 }
 
 static void bn_mul(const uint32_t *a, const uint32_t *b, uint32_t *out) {
@@ -399,28 +391,35 @@ static void point_add(const ECDSA_Point *p, const ECDSA_Point *q, ECDSA_Point *o
 	out->infinity = 0;
 }
 
-static void point_mul(const uint32_t *scalar, const ECDSA_Point *point, ECDSA_Point *out) {
+static void point_mul_add(const uint32_t *k1,
+						  const ECDSA_Point *p1,
+						  const uint32_t *k2,
+						  const ECDSA_Point *p2,
+						  ECDSA_Point *out) {
 	ECDSA_Point result;
-	ECDSA_Point addend;
+	ECDSA_Point precomp[4];
 	int bit;
+	ECDSA_Point tmp;
+	int idx;
 
 	result.infinity = 1;
-	point_copy(&addend, point);
+	precomp[0].infinity = 1;
+	point_copy(&precomp[1], p1);
+	point_copy(&precomp[2], p2);
+	point_add(p1, p2, &precomp[3]);
 
-	for (bit = 0; bit < 256; ++bit) {
-		if (bit % 21 == 0) {
-			printf("Verifying signature ...\n");
+	for (bit = 255; bit >= 0; --bit) {
+		if ((255 - bit) % 13 == 0) {
+			 printf("Verifying... %d%%\n", (255-bit)/13*5);
 		}
-		if ((scalar[bit / 32] >> (bit % 32)) & 1u) {
-			ECDSA_Point tmp;
-			point_add(&result, &addend, &tmp);
+
+		point_double(&result, &tmp);
+		point_copy(&result, &tmp);
+
+		idx = (bn_get_bit_256(k1, bit) << 1) | bn_get_bit_256(k2, bit);
+		if (idx != 0) {
+			point_add(&result, &precomp[idx], &tmp);
 			point_copy(&result, &tmp);
-		}
-
-		{
-			ECDSA_Point tmp;
-			point_double(&addend, &tmp);
-			point_copy(&addend, &tmp);
 		}
 	}
 
@@ -738,8 +737,6 @@ int ecdsa_verify_p256(const ECDSA_PublicKey *public_key,
 	uint32_t u2[P256_LIMBS];
 	ECDSA_Point g;
 	ECDSA_Point q;
-	ECDSA_Point p1;
-	ECDSA_Point p2;
 	ECDSA_Point sum;
 	uint32_t x_mod_n[P256_LIMBS];
 	uint32_t input[16];
@@ -778,9 +775,7 @@ int ecdsa_verify_p256(const ECDSA_PublicKey *public_key,
 	bn_copy(q.y, public_key->y);
 	q.infinity = 0;
 
-	point_mul(u1, &g, &p1);
-	point_mul(u2, &q, &p2);
-	point_add(&p1, &p2, &sum);
+	point_mul_add(u1, &g, u2, &q, &sum);
 
 	if (sum.infinity) {
 		return 0;

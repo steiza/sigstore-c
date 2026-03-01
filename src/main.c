@@ -8,8 +8,6 @@
 #include "ecdsa.h"
 #include "sha256.h"
 
-static int MAX_FILE_SIZE = 102400;
-
 struct parsedBundle {
     char signature_bytes[72];
     char digest_bytes[32];
@@ -87,6 +85,8 @@ int parse_bundle(char* bundle_str, struct parsedBundle* parsed_bundle) {
     char* payload_decoded;
     size_t payload_decoded_size;
     size_t decode_size;
+    size_t i;
+    int high, low;
 
     bundle = cJSON_Parse(bundle_str);
     if (bundle == NULL) {
@@ -251,9 +251,9 @@ int parse_bundle(char* bundle_str, struct parsedBundle* parsed_bundle) {
             return 1;
         }
 
-        for (size_t i = 0; i < 32; i++) {
-            int high = hex_char_to_nibble(digest->valuestring[i * 2]);
-            int low = hex_char_to_nibble(digest->valuestring[i * 2 + 1]);
+        for (i = 0; i < 32; i++) {
+            high = hex_char_to_nibble(digest->valuestring[i * 2]);
+            low = hex_char_to_nibble(digest->valuestring[i * 2 + 1]);
 
             if (high < 0 || low < 0) {
                 fprintf(stderr, "Error: Invalid hex in 'sha256' digest\n");
@@ -300,8 +300,6 @@ int main(int argc, char *argv[]) {
     unsigned char file_hash[32];
     char digest_b64[44];
     ECDSA_PublicKey public_key;
-    char signature_bytes[72];
-    size_t signature_bytes_size;
 
     memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
