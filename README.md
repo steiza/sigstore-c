@@ -56,10 +56,15 @@ Signature verified successfully
 ### Frequently Asked Questions
 
 **Q**: Will this run on my PDP-11?
+
 **A**: A suprising number of people ask this. I'm not sure. It should, if you have a C89 compiler and either a PDP-11 or a way to emulate one.
 
+
 **Q**: Will you add my favorite feature to this?
+
 **A**: Probably not.
 
+
 **Q**: Should I use this in production?
+
 **A**: Definitely not!
