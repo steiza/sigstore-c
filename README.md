@@ -1,6 +1,6 @@
 sigstore-c is a Sigstore client library that prioritizes portability over features (and correctness!)
 
-![sigstore-c running in DOS showing verification](assets/demo.webm)
+![sigstore-c running in DOS showing verification](assets/demo.gif)
 
 It's written in C89, which allows it to run in old environments with limited resource, like a 16-bit DOS program that only uses the [8086](https://en.wikipedia.org/wiki/Intel_8086) instruction set.
 
