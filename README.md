@@ -1,5 +1,7 @@
 sigstore-c is a Sigstore client library that prioritizes portability over features (and correctness!)
 
+[sigstore_c_demo.webm](https://github.com/user-attachments/assets/0600212a-a0b8-43a0-b9a1-3ac8c9cea081)
+
 It's written in C89, which allows it to run in old environments with limited resource, like a 16-bit DOS program that only uses the [8086](https://en.wikipedia.org/wiki/Intel_8086) instruction set.
 
 To compile it, you need a C89 compiler for your target architecture and computing environment, like gcc or [Open Watcom v2](https://github.com/open-watcom/open-watcom-v2).
