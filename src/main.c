@@ -6,10 +6,12 @@
 #include "base64.h"
 #include "cjson/cJSON.h"
 #include "ecdsa.h"
+#include "mldsa.h"
 #include "sha256.h"
 
 struct parsedBundle {
-    char signature_bytes[72];
+    size_t signature_len;
+    char signature_bytes[3309];
     char digest_bytes[32];
 };
 
@@ -111,12 +113,12 @@ int parse_bundle(char* bundle_str, struct parsedBundle* parsed_bundle) {
     if (message_signature != NULL) {
         // Parse messageSignature
         signature = cJSON_GetObjectItemCaseSensitive(message_signature, "signature");
-        if (signature == NULL || signature->type != cJSON_String || strlen(signature->valuestring) > 96) {
+        if (signature == NULL || signature->type != cJSON_String || strlen(signature->valuestring) > 4412) {
             fprintf(stderr, "Error: Missing or invalid 'messageSignature.signature' field\n");
             cJSON_Delete(bundle);
             return 1;
         }
-        base64_decode(signature->valuestring, parsed_bundle->signature_bytes, &decode_size);
+        base64_decode(signature->valuestring, parsed_bundle->signature_bytes, &parsed_bundle->signature_len);
 
         message_digest = cJSON_GetObjectItemCaseSensitive(message_signature, "messageDigest");
         if (message_digest == NULL) {
@@ -190,7 +192,7 @@ int parse_bundle(char* bundle_str, struct parsedBundle* parsed_bundle) {
             cJSON_Delete(bundle);
             return 1;
         }
-        base64_decode(signature->valuestring, parsed_bundle->signature_bytes, &decode_size);
+        base64_decode(signature->valuestring, parsed_bundle->signature_bytes, &parsed_bundle->signature_len);
 
         // Parse payload
         payload = cJSON_GetObjectItemCaseSensitive(dsse_envelope, "payload");
@@ -299,7 +301,8 @@ int main(int argc, char *argv[]) {
     SHA256_CTX ctx;
     unsigned char file_hash[32];
     char digest_b64[44];
-    ECDSA_PublicKey public_key;
+    ECDSA_PublicKey ecdsa_public_key;
+    MLDSA_65_PublicKey mldsa_public_key;
 
     memset(&parsed_bundle, 0, sizeof(struct parsedBundle));
 
@@ -342,12 +345,26 @@ int main(int argc, char *argv[]) {
     }
 
     filepath = argv[2];
-    if (ecdsa_load_public_key_p256(filepath, &public_key) != 0) {
-        fprintf(stderr, "Error: unable to load public key");
-        return 1;
-    }
-    if (ecdsa_verify_p256(&public_key, file_hash, 32, parsed_bundle.signature_bytes, 72) != 0) {
-        fprintf(stderr, "Error: signature failed to verify");
+    if (parsed_bundle.signature_len <= 72) {
+        if (ecdsa_load_public_key_p256(filepath, &ecdsa_public_key) != 0) {
+            fprintf(stderr, "Error: unable to load public key\n");
+            return 1;
+        }
+        if (ecdsa_verify_p256(&ecdsa_public_key, file_hash, 32, parsed_bundle.signature_bytes, 72) != 0) {
+            fprintf(stderr, "Error: signature failed to verify\n");
+            return 1;
+        }
+    } else if (parsed_bundle.signature_len == 3309) {
+        if (mldsa_65_load_public_key(filepath, &mldsa_public_key) != 0) {
+            fprintf(stderr, "Error: unable to load public key\n");
+            return 1;
+        }
+        if (mldsa_65_verify(&mldsa_public_key, "", 0, file_hash, 32, parsed_bundle.signature_bytes, 3309) != 0) {
+            fprintf(stderr, "Error: signature failed to verify\n");
+            return 1;
+        }
+    } else {
+        fprintf(stderr, "Error: did not recognize signature length\n");
         return 1;
     }
 

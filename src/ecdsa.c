@@ -5,6 +5,7 @@
 
 #include "base64.h"
 #include "ecdsa.h"
+#include "file.h"
 
 #define P256_LIMBS 8
 
@@ -426,53 +427,6 @@ static void point_mul_add(const uint32_t *k1,
 	point_copy(out, &result);
 }
 
-
-static char *read_file_all(const char *path, size_t *out_len) {
-	FILE *file = NULL;
-	long size = 0;
-	char *buf = NULL;
-
-	file = fopen(path, "rb");
-	if (file == NULL) {
-		return NULL;
-	}
-
-	if (fseek(file, 0, SEEK_END) != 0) {
-		fclose(file);
-		return NULL;
-	}
-
-	size = ftell(file);
-	if (size < 0) {
-		fclose(file);
-		return NULL;
-	}
-
-	if (fseek(file, 0, SEEK_SET) != 0) {
-		fclose(file);
-		return NULL;
-	}
-
-	buf = (char *)malloc((size_t)size + 1);
-	if (buf == NULL) {
-		fclose(file);
-		return NULL;
-	}
-
-	if (fread(buf, 1, (size_t)size, file) != (size_t)size) {
-		free(buf);
-		fclose(file);
-		return NULL;
-	}
-
-	buf[size] = '\0';
-	fclose(file);
-	if (out_len != NULL) {
-		*out_len = (size_t)size;
-	}
-	return buf;
-}
-
 static int pem_extract_base64(const char *pem, const char *begin_marker, const char *end_marker, char **out_b64) {
 	const char *begin = strstr(pem, begin_marker);
 	const char *end = NULL;
@@ -678,7 +632,7 @@ int ecdsa_load_public_key_p256(const char *public_key_path, ECDSA_PublicKey *out
 		return 1;
 	}
 
-	pem = read_file_all(public_key_path, NULL);
+	pem = read_file_all(public_key_path, 0);
 	if (pem == NULL) {
 		fprintf(stderr, "Error: Unable to read public key file '%s'\n", public_key_path);
 		return 1;
