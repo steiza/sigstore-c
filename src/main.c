@@ -6,6 +6,7 @@
 #include "base64.h"
 #include "cjson/cJSON.h"
 #include "ecdsa.h"
+#include "file.h"
 #include "mldsa.h"
 #include "sha256.h"
 
@@ -26,42 +27,6 @@ static int hex_char_to_nibble(char c) {
         return c - 'A' + 10;
     }
     return -1;
-}
-
-char *read_bundle(const char* filepath) {
-    struct stat file_stat;
-    FILE* file;
-    char* buffer;
-    size_t bytes_read;
-
-    if (stat(filepath, &file_stat) != 0) {
-        fprintf(stderr, "Error: Unable to access file '%s'\n", filepath);
-        return NULL;
-    }
-
-    file = fopen(filepath, "rb");
-    if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file '%s'\n", filepath);
-        return NULL;
-    }
-
-    buffer = (char *)malloc(file_stat.st_size + 1);
-    if (buffer == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed\n");
-        fclose(file);
-        return NULL;
-    }
-
-    bytes_read = fread(buffer, 1, file_stat.st_size, file);
-    if (bytes_read != (size_t)file_stat.st_size) {
-        fprintf(stderr, "Error: Failed to read file completely\n");
-        free(buffer);
-        fclose(file);
-        return NULL;
-    }
-
-    fclose(file);
-    return buffer;
 }
 
 int parse_bundle(char* bundle_str, struct parsedBundle* parsed_bundle) {
@@ -295,8 +260,8 @@ int hash_file(char *filepath, SHA256_CTX* ctx) {
 }
 
 int main(int argc, char *argv[]) {
-    char* filepath;
-    char* bundle;
+    char* bundle, *file, *filepath;
+    size_t file_size;
     struct parsedBundle parsed_bundle;
     SHA256_CTX ctx;
     unsigned char file_hash[32];
@@ -312,7 +277,7 @@ int main(int argc, char *argv[]) {
     }
 
     filepath = argv[1];
-    bundle = read_bundle(filepath);
+    bundle = read_file_all(filepath, 0);
 
     if (bundle == NULL) {
         return 1;
@@ -331,7 +296,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     sha256_final(&ctx, file_hash);
-
 
     if (strncmp(file_hash, parsed_bundle.digest_bytes, 32) == 0) {
         printf("Digest matches\n");
@@ -359,10 +323,14 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Error: unable to load public key\n");
             return 1;
         }
-        if (mldsa_65_verify(&mldsa_public_key, "", 0, file_hash, 32, parsed_bundle.signature_bytes, 3309) != 0) {
+        filepath = argv[3];
+        file = read_file_and_len(filepath, &file_size);
+        if (mldsa_65_verify(&mldsa_public_key, "", 0, file, file_size, parsed_bundle.signature_bytes, 3309) != 0) {
+            free(file);
             fprintf(stderr, "Error: signature failed to verify\n");
             return 1;
         }
+        free(file);
     } else {
         fprintf(stderr, "Error: did not recognize signature length\n");
         return 1;

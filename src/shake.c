@@ -263,7 +263,7 @@ void shake128_digest(SHAKE128_CTX *ctx, uint8_t hash[], size_t len) {
 	if (ctx->finalized == 0) {
 		memset(&ctx->buffer[ctx->buffer_len], 0, SHAKE128_RATE - ctx->buffer_len);
 		/* SHAKE domain separation byte with Keccak multi-rate padding. */
-		ctx->buffer[ctx->buffer_len] ^= 0x06u;
+		ctx->buffer[ctx->buffer_len] ^= 0x1fu;
 		ctx->buffer[SHAKE128_RATE - 1u] ^= 0x80u;
 		absorb_block_128(ctx, ctx->buffer);
 		ctx->buffer_len = 0;

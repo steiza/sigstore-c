@@ -197,6 +197,7 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 	int w1_row[256];
 	uint8_t w1_packed[128]; /* 256 coefficients * 4 bits / 8 */
 	SHAKE256_CTX shake_ctx;
+	uint8_t mu[64]; /* μ = SHAKE256(tr ‖ 0 ‖ ctx_len ‖ ctx ‖ msg)[64] */
 	uint8_t ch_check[MLDSA_65_LAMBDA_B];
 	int i, j, k, idx;
 	char c;
@@ -252,7 +253,7 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 		ntt_pure(z_hat[i]);
 	}
 
-	/* Compute SHAKE256(μ ‖ pack(w1)) and compare to c_tilde */
+	/* Compute μ = SHAKE256(tr ‖ 0x00 ‖ ctx_len ‖ ctx ‖ msg)[64] */
 	shake256_init(&shake_ctx);
 	shake256_update(&shake_ctx, public_key->tr, SHAKE256_DIGEST_SIZE);
 	c = 0;
@@ -260,6 +261,11 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 	shake256_update(&shake_ctx, &ctx_len, 1);
 	shake256_update(&shake_ctx, ctx, ctx_len);
 	shake256_update(&shake_ctx, msg, msg_len);
+	shake256_digest(&shake_ctx, mu, 64);
+
+	/* Compute SHAKE256(μ ‖ pack(w1)) and compare to c_tilde */
+	shake256_init(&shake_ctx);
+	shake256_update(&shake_ctx, mu, 64);
 
 	for (i = 0; i < MLDSA_65_K_VAL; i++) {
 		/* t1_hat = NTT(unpack_10bit(key) << 13) for row i */
