@@ -7,7 +7,7 @@
 #include "shake.h"
 #include "mldsa.h"
 
-static int Q = 8380417;
+static uint32_t Q = 8380417;
 
 #define MLDSA_65_SIG_LEN     3309
 #define MLDSA_65_LAMBDA_B    48      /* λ/4 bytes for commitment hash */
@@ -73,12 +73,13 @@ int mldsa_65_load_public_key(const char *public_key_path, MLDSA_65_PublicKey *ou
 }
 
 static void ntt_pure(uint32_t f[256]) {
-	int k = 1;
-	for (int len = 128; len >= 1; len >>= 1) {
-		for (int start = 0; start < 256; start += 2 * len) {
-			uint32_t zeta = ZETA[k++];
-			for (int j = start; j < start + len; j++) {
-				uint32_t t = (uint64_t)zeta * f[j + len] % (uint32_t)Q;
+	int len, start, j, k = 1;
+    uint32_t zeta, t;
+	for (len = 128; len >= 1; len >>= 1) {
+		for (start = 0; start < 256; start += 2 * len) {
+			zeta = ZETA[k++];
+			for (j = start; j < start + len; j++) {
+				t = (uint64_t)zeta * f[j + len] % (uint32_t)Q;
 				f[j + len] = (f[j] + (uint32_t)Q - t) % (uint32_t)Q;
 				f[j] = (f[j] + t) % (uint32_t)Q;
 			}
@@ -87,19 +88,20 @@ static void ntt_pure(uint32_t f[256]) {
 }
 
 static void inverse_ntt_pure(uint32_t f[256]) {
-	int k = 255;
-	for (int len = 1; len <= 128; len <<= 1) {
-		for (int start = 0; start < 256; start += 2 * len) {
-			uint32_t zeta = ZETA[k--];
-			for (int j = start; j < start + len; j++) {
-				uint32_t t = f[j];
+	int len, start, i, j, k = 255;
+    uint32_t zeta, t;
+	for (len = 1; len <= 128; len <<= 1) {
+		for (start = 0; start < 256; start += 2 * len) {
+			zeta = ZETA[k--];
+			for (j = start; j < start + len; j++) {
+				t = f[j];
 				f[j] = (t + f[j + len]) % (uint32_t)Q;
 				f[j + len] = (uint64_t)zeta * ((f[j + len] + (uint32_t)Q - t) % (uint32_t)Q) % (uint32_t)Q;
 			}
 		}
 	}
 	/* scale by n^(-1) mod Q = 8347681 */
-	for (int i = 0; i < 256; i++) {
+	for (i = 0; i < 256; i++) {
 		f[i] = (uint64_t)f[i] * 8347681 % (uint32_t)Q;
 	}
 }
@@ -164,9 +166,9 @@ static int use_hint_v(uint32_t w, int h, uint32_t gamma2) {
 }
 
 static void pack_w1_impl(const int *w1, int bit_length, uint8_t *out) {
-	int acc = 0, acc_len = 0;
+	int i, acc = 0, acc_len = 0;
 	size_t out_idx = 0;
-	for (int i = 0; i < 256; i++) {
+	for (i = 0; i < 256; i++) {
 		acc |= w1[i] << acc_len;
 		acc_len += bit_length;
 		while (acc_len >= 8) {
@@ -186,6 +188,7 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
                     const unsigned char *signature,
                     size_t signature_len) {
 	const uint8_t *c_tilde, *sig_z, *sig_h;
+    uint8_t *zp;
 	uint32_t z[MLDSA_65_L_VAL][256];
 	uint32_t z_hat[MLDSA_65_L_VAL][256];
 	int h_hints[MLDSA_65_K_VAL][256];
@@ -199,11 +202,12 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 	SHAKE256_CTX shake_ctx;
 	uint8_t mu[64]; /* μ = SHAKE256(tr ‖ 0 ‖ ctx_len ‖ ctx ‖ msg)[64] */
 	uint8_t ch_check[MLDSA_65_LAMBDA_B];
-	int i, j, k, idx;
+	int i, j, k, idx, limit, first;
 	char c;
+    uint32_t raw, v, ct;
 
 	if (public_key == NULL || msg == NULL || signature == NULL) return 1;
-	if (signature_len != MLDSA_65_SIG_LEN || ctx_len > 255) return 1;
+	if (signature_len != MLDSA_65_SIG_LEN) return 1;
 
 	c_tilde = signature;
 	sig_z   = signature + MLDSA_65_LAMBDA_B;
@@ -211,9 +215,9 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 
 	/* Unpack z: L polynomials, 20-bit signed (γ1 - raw) */
 	for (i = 0; i < MLDSA_65_L_VAL; i++) {
-		const uint8_t *zp = sig_z + (size_t)i * MLDSA_65_Z_BYTES_VAL;
+		*zp = sig_z + (size_t)i * MLDSA_65_Z_BYTES_VAL;
 		for (j = 0; j < 256; j++) {
-			uint32_t raw = unpack_20bit(zp, j);
+			raw = unpack_20bit(zp, j);
 			z[i][j] = (MLDSA_65_GAMMA1_VAL + (uint32_t)Q - raw) % (uint32_t)Q;
 		}
 	}
@@ -222,9 +226,9 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 	memset(h_hints, 0, sizeof(h_hints));
 	idx = 0;
 	for (i = 0; i < MLDSA_65_K_VAL; i++) {
-		int limit = sig_h[MLDSA_65_OMEGA_VAL + i];
+		limit = sig_h[MLDSA_65_OMEGA_VAL + i];
 		if (limit < idx || limit > MLDSA_65_OMEGA_VAL) return 1;
-		int first = idx;
+		first = idx;
 		while (idx < limit) {
 			if (idx > first && sig_h[idx - 1] >= sig_h[idx]) return 1;
 			h_hints[i][sig_h[idx]] = 1;
@@ -238,7 +242,7 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 	/* Check ||z||∞ < γ1 - β */
 	for (i = 0; i < MLDSA_65_L_VAL; i++) {
 		for (j = 0; j < 256; j++) {
-			uint32_t v = z[i][j] <= (uint32_t)Q / 2 ? z[i][j] : (uint32_t)Q - z[i][j];
+			v = z[i][j] <= (uint32_t)Q / 2 ? z[i][j] : (uint32_t)Q - z[i][j];
 			if (v >= MLDSA_65_GAMMA1_VAL - MLDSA_65_BETA_VAL) return 1;
 		}
 	}
@@ -284,7 +288,7 @@ int mldsa_65_verify(const MLDSA_65_PublicKey *public_key,
 		}
 		/* w_hat -= c_hat ∘ t1_hat */
 		for (k = 0; k < 256; k++) {
-			uint32_t ct = (uint64_t)c_hat[k] * t1_hat[k] % (uint32_t)Q;
+			ct = (uint64_t)c_hat[k] * t1_hat[k] % (uint32_t)Q;
 			w_hat[k] = (w_hat[k] + (uint32_t)Q - ct) % (uint32_t)Q;
 		}
 
@@ -327,15 +331,15 @@ static uint32_t montgomery_multiply(uint32_t a, uint32_t b) {
 }
 
 static void ntt_transform(uint32_t *coeffs, uint32_t *out) {
-    uint32_t f[256];
+    uint32_t f[256], zeta, t;
+    int len, start, j, k = 1;
     memcpy(f, coeffs, 256 * sizeof(uint32_t));
 
-    int k = 1;
-    for (int len = 128; len >= 1; len >>= 1) {
-        for (int start = 0; start < 256; start += 2 * len) {
-            uint32_t zeta = ZETA[k++];
-            for (int j = start; j < start + len; j++) {
-                uint32_t t = montgomery_multiply(f[j + len], zeta);
+    for (len = 128; len >= 1; len >>= 1) {
+        for (start = 0; start < 256; start += 2 * len) {
+            zeta = ZETA[k++];
+            for (j = start; j < start + len; j++) {
+                t = montgomery_multiply(f[j + len], zeta);
                 f[j + len] = (f[j] - t + Q) % Q;
                 f[j] = (f[j] + t) % Q;
             }
@@ -347,13 +351,15 @@ static void ntt_transform(uint32_t *coeffs, uint32_t *out) {
 
 static void sample_ntt(const uint8_t *rho, int s, int r, uint32_t *out) {
 	SHAKE128_CTX shake128_ctx;
-	uint8_t buf[894];
+	uint8_t buf[894], indices[2];
 	int a_idx = 0;
 	size_t buf_idx = 0;
+    uint32_t v;
 
 	shake128_init(&shake128_ctx);
 	shake128_update(&shake128_ctx, rho, 32);
-	uint8_t indices[2] = {s, r};
+	indices[0] = s;
+    indices[1] = r;
 	shake128_update(&shake128_ctx, indices, 2);
 	shake128_digest(&shake128_ctx, buf, 894);
 
@@ -361,7 +367,7 @@ static void sample_ntt(const uint8_t *rho, int s, int r, uint32_t *out) {
 		if (buf_idx + 3 > 894) {
 			break;
 		}
-		uint32_t v = (buf[buf_idx] | (buf[buf_idx + 1] << 8) | (buf[buf_idx + 2] << 16)) & 0x7FFFFF;
+		v = (buf[buf_idx] | (buf[buf_idx + 1] << 8) | (buf[buf_idx + 2] << 16)) & 0x7FFFFF;
 		buf_idx += 3;
 		if (v < Q) {
 			out[a_idx++] = v;

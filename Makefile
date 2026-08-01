@@ -12,7 +12,7 @@ dos16:
 	/snap/open-watcom/2/binl64/wcc src/sha256.c -fo=.obj -i=/snap/open-watcom/2/h -bt=dos
 	/snap/open-watcom/2/binl64/wcc src/shake.c -fo=.obj -i=/snap/open-watcom/2/h -bt=dos
 	/snap/open-watcom/2/binl64/wcc src/main.c -fo=.obj -i=/snap/open-watcom/2/h -bt=dos
-	INCLUDE=/snap/open-watcom/current/lh && WATCOM=/snap/open-watcom/2 && /snap/open-watcom/2/binl64/wlink Name SIGSTORE Format Dos LIBPath /snap/open-watcom/2/lib286/dos Library /snap/open-watcom/2/lib286/math87s.lib File base64.obj,cJSON.obj,ecdsa.obj,file.obj,main.obj,mldsa.obj,sha256.obj,shake.obj
+	INCLUDE=/snap/open-watcom/current/lh && WATCOM=/snap/open-watcom/2 && /snap/open-watcom/2/binl64/wlink Name SIGSTORE Option stack=0xc000 Format Dos LIBPath /snap/open-watcom/2/lib286/dos Library /snap/open-watcom/2/lib286/math87s.lib File base64.obj,cJSON.obj,ecdsa.obj,file.obj,main.obj,mldsa.obj,sha256.obj,shake.obj
 
 test: build
 	./sigstore testdata/simple.sigstore.json testdata/cosign.pub testdata/a.txt
