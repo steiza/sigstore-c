@@ -13,8 +13,6 @@
 typedef struct MLDSA_65_PublicKey {
     uint8_t bytes[MLDSA_65_KEY_LEN];
     uint8_t tr[SHAKE256_DIGEST_SIZE];
-    uint32_t t1[MLDSA_65_K][256];
-    uint32_t A[MLDSA_65_K][MLDSA_65_L][256];
 } MLDSA_65_PublicKey;
 
 int mldsa_65_load_public_key(const char *public_key_path, MLDSA_65_PublicKey *out_key);

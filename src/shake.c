@@ -6,7 +6,7 @@
 #define SHAKE128_RATE 168
 #define SHAKE256_ROUNDS 24
 
-#define ROTL64(x, n) (((x) << (n)) | ((x) >> (64u - (n))))
+#define ROTL64(x, n) ((n) == 0u ? (x) : (((x) << (n)) | ((x) >> (64u - (n)))))
 
 static const uint64_t KECCAKF_ROUND_CONSTANTS[SHAKE256_ROUNDS] = {
 	0x0000000000000001ULL, 0x0000000000008082ULL,
